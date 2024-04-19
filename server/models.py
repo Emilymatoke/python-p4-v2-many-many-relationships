@@ -2,88 +2,68 @@
 
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import MetaData
-from sqlalchemy.ext.associationproxy import association_proxy
+from sqlalchemy_serializer import SerializerMixin
 
-metadata = MetaData(naming_convention={
+convention = {
+    "ix": "ix_%(column_0_label)s",
+    "uq": "uq_%(table_name)s_%(column_0_name)s",
+    "ck": "ck_%(table_name)s_%(constraint_name)s",
     "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
-})
+    "pk": "pk_%(table_name)s"
+}
+
+metadata = MetaData(naming_convention=convention)
 
 db = SQLAlchemy(metadata=metadata)
 
-# Associate employee_meeting table to Employee and Meeting
-employee_meetings = db.Table(
-    'employee_meetings', # table name
-    metadata, # only necessary if you have specified metadata
-    db.Column('employee_id', db.Integer, db.ForeignKey('employees.id'), primary_key=True),
-    db.Column('meeting_id', db.Integer, db.ForeignKey('meetings.id'), primary_key=True)
 
-)
-
-class Employee(db.Model):
-    __tablename__ = 'employees'
+class Zookeeper(db.Model, SerializerMixin):
+    __tablename__ = 'zookeepers'
 
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String)
-    hire_date = db.Column(db.Date)
+    name = db.Column(db.String, unique=True)
+    birthday = db.Column(db.Date)
 
-    # Relationship between associated class uses special paremeter secondary
-    meetings = db.relationship('Meeting', secondary=employee_meetings, back_populates='employees')
+    animals = db.relationship('Animal', back_populates='zookeeper')
 
-    # Relationship mapping the employee to related assignments
-    assignments = db.relationship('Assignment', backref='employee', cascade='all, delete-orphan')
-
-    # Association proxy to get projects for this employee through assignments
-    projects = association_proxy('assignments', 'project', creator=lambda project_obj: Assignment(project=project_obj))
+    # don't forget that every tuple needs at least one comma!
+    serialize_rules = ('-animals.zookeeper',)
 
     def __repr__(self):
-        return f'<Employee {self.id}, {self.name}, {self.hire_date}>'
+        return f'<Zookeper {self.name}, a {self.birthday}>'
 
 
-class Meeting(db.Model):
-    __tablename__ = 'meetings'
+class Enclosure(db.Model, SerializerMixin):
+    __tablename__ = 'enclosures'
 
     id = db.Column(db.Integer, primary_key=True)
-    topic = db.Column(db.String)
-    scheduled_time = db.Column(db.DateTime)
-    location = db.Column(db.String)
+    environment = db.Column(db.String)
+    open_to_visitors = db.Column(db.Boolean)
 
-     # Relationship between associated class uses special paremeter secondary
-    employees = db.relationship('Employee', secondary=employee_meetings, back_populates='meetings')
+    animals = db.relationship('Animal', back_populates='enclosure')
+
+    # don't forget that every tuple needs at least one comma!
+    serialize_rules = ('-animals.enclosure',)
 
     def __repr__(self):
-        return f'<Meeting {self.id}, {self.topic}, {self.scheduled_time}, {self.location}>'
+        return f'<Enclosure {self.environment}, a {self.open_to_visitors}>'
 
 
-class Project(db.Model):
-    __tablename__ = 'projects'
+class Animal(db.Model, SerializerMixin):
+    __tablename__ = 'animals'
 
     id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String)
-    budget = db.Column(db.Integer)
+    name = db.Column(db.String, unique=True)
+    species = db.Column(db.String)
 
-    # Relationship mapping the employee to related assignments
-    assignments = db.relationship('Assignment', backref='project', cascade='all, delete-orphan')
+    zookeeper_id = db.Column(db.Integer, db.ForeignKey('zookeepers.id'))
+    enclosure_id = db.Column(db.Integer, db.ForeignKey('enclosures.id'))
 
-    # Association proxy to get employees for this project through assignments
-    employees = association_proxy('assignments', 'employee', creator=lambda employee_obj: Assignment(employee=employee_obj))
+    enclosure = db.relationship('Enclosure', back_populates='animals')
+    zookeeper = db.relationship('Zookeeper', back_populates='animals')
 
-
-    def __repr__(self):
-        return f'<Review {self.id}, {self.title}, {self.budget}>'
-    
-# Association Model to store many-to-many relationship between employee and project
-class Assignment(db.Model):
-    __tablename__ = 'assignments'
-
-    id = db.Column(db.Integer, primary_key=True)
-    role = db.Column(db.String)
-    start_date = db.Column(db.DateTime)
-    end_date = db.Column(db.DateTime)
-
-    # Foreign key to store the employee id
-    employee_id = db.Column(db.Integer, db.ForeignKey('employees.id'))
-    # Foreign key to store the project id
-    project_id = db.Column(db.Integer, db.ForeignKey('projects.id'))
+    # don't forget that every tuple needs at least one comma!
+    serialize_rules = ('-enclosure.animals', '-zookeeper.animals')
 
     def __repr__(self):
-        return f'<Assignment {self.id}, {self.role}, {self.start_date}, {self.end_date}, {self.employee.name}, {self.project.title}>'
+        return f'<Animal {self.name}, a {self.species}>'
